@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Basalt Column Wall Generator v1.23</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- Row 1: dimensions, column, contrast, brightness, roughness, texture -->
+  <div class="controls">
+    <div class="ctrl">
+      <label>Canvas W (m)</label>
+      <input type="number" id="cwm" value="36" min="0.5" max="80" step="0.5">
+    </div>
+    <div class="ctrl">
+      <label>Canvas H (m)</label>
+      <input type="number" id="chm" value="45" min="0.5" max="80" step="0.5">
+    </div>
+    <div class="ctrl">
+      <label>Print DPI</label>
+      <input type="number" id="dpi" value="100" min="72" max="600" step="1">
+    </div>
+    <div class="ctrl">
+      <label>Column (m)</label>
+      <input type="range" id="colm" min="0.2" max="3.0" value="0.6" step="0.05">
+      <span class="ctrl-out" id="colm-out">0.60m</span>
+    </div>
+    <div class="ctrl">
+      <label>Contrast</label>
+      <input type="range" id="ct" min="0" max="100" value="45" step="1">
+      <span class="ctrl-out" id="ct-out">45%</span>
+    </div>
+    <div class="ctrl">
+      <label>&#9728; Day / Night &#9790;</label>
+      <input type="range" id="bright" min="0" max="100" value="80" step="1">
+      <span class="ctrl-out" id="bright-out">Day 80%</span>
+    </div>
+    <div class="ctrl">
+      <label>XY roughness</label>
+      <input type="range" id="er" min="0" max="100" value="35" step="1">
+      <span class="ctrl-out" id="er-out">35%</span>
+    </div>
+    <div class="ctrl">
+      <label>Texture</label>
+      <input type="range" id="td" min="10" max="220" value="100" step="10">
+      <span class="ctrl-out" id="td-out">100</span>
+    </div>
+  </div>
+
+  <!-- Row 2: grid, ports, debug, info, download -->
+  <div class="controls">
+    <label class="chk">
+      <input type="checkbox" id="grid"> Print grid
+    </label>
+    <div class="ctrl">
+      <label>Grid colour</label>
+      <input type="color" id="gcol" value="#ff5050">
+    </div>
+    <div class="ctrl">
+      <label>Grid width</label>
+      <input type="range" id="glw" min="0.5" max="5" value="1" step="0.5">
+      <span class="ctrl-out" id="glw-out">1.0px</span>
+    </div>
+    <label class="chk">
+      <input type="checkbox" id="ports"> TSU-9 ports
+    </label>
+    <label class="chk">
+      <input type="checkbox" id="dbg"> Debug
+    </label>
+    <span id="info"></span>
+    <button id="btn-dl">Download PNG</button>
+  </div>
+
+  <canvas id="c"></canvas>
+
+  <!-- JS: order matters — geometry first, then render, then actions (wires everything) -->
+  <script src="js/geometry.js"></script>
+  <script src="js/render.js"></script>
+  <script src="js/actions.js"></script>
+
+</body>
+</html>

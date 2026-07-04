@@ -6,7 +6,7 @@
  * Depends on: geometry.js (m2px), render.js (render, lightParams)
  */
 
-var VERSION = '1.34';
+var VERSION = '1.28';
 var MAX_PIXELS = 20000000;
 var raf = null;
 
@@ -60,6 +60,8 @@ function readParams() {
   var showPorts = $('ports').checked;
   var portFont  = parseInt($('pfont').value) || 10;
   var debug = $('dbg').checked;
+  var groundVariance = parseFloat($('gvar').value); if (isNaN(groundVariance)) groundVariance = 0.4;
+  var clusterCount   = parseInt($('clusters').value) || 0;
 
   var W = Math.round(m2px(Wm, dpi));
   var H = Math.round(m2px(Hm, dpi));
@@ -107,6 +109,8 @@ function readParams() {
     showPorts: showPorts,
     portFont: portFont,
     debug: debug,
+    groundVariance: groundVariance,
+    clusterCount: clusterCount,
     lp: lp
   };
 }
@@ -147,6 +151,8 @@ function init() {
     return label;
   });
   wire('td', function (v) { return v; });
+  wire('gvar', function (v) { return parseFloat(v).toFixed(2) + 'm'; });
+  wire('clusters', function (v) { return v; });
   wire('glw', function (v) { return v + 'px'; });
   wire('pfont', function (v) { return v + 'px'; });
 

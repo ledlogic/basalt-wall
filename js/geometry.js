@@ -30,21 +30,48 @@ function seededRand(seed) {
   };
 }
 
+// ── Face width ratio from view angle ─────────────────────────────
+// At view angle θ (degrees), the lit face projects wider and the shadow
+// face narrower. Returns litRatio in [0,1] where 0.5 = equal widths.
+// Based on cos(30° ± θ) hexagonal prism projection.
+
+function viewAngleToRatio(angleDeg) {
+  var theta = angleDeg * Math.PI / 180;
+  var litW = Math.cos(Math.PI / 6 - theta);
+  var darkW = Math.cos(Math.PI / 6 + theta);
+  litW = Math.max(0.05, litW);
+  darkW = Math.max(0.05, darkW);
+  return litW / (litW + darkW);
+}
+
 // ── Seam construction ─────────────────────────────────────────────
 // Each column boundary is a perturbed vertical polyline.
 // Adjacent columns share the same Y grid so quads are watertight.
+// litRatio (0–1): fraction of each lit+dark pair that is lit.
+//   0.5 = equal widths (straight-on view)
+//   >0.5 = lit face wider (angled to show more lit face)
 //
 // Returns:
 //   SVX[seamIndex][row] — x position of vertex
 //   SVY[seamIndex][row] — y position of vertex (shared across all seams)
-//   numSeams, numCols, numRows
+//   numSeams, numCols, numRows, litW, darkW
 
-function buildSeams(canvasW, canvasH, colWidthPx, xyRoughness) {
-  var numCols = Math.ceil(canvasW / colWidthPx) + 3;
+function buildSeams(canvasW, canvasH, colWidthPx, xyRoughness, litRatio) {
+  // litRatio defaults to 0.5 if not supplied
+  if (litRatio === undefined) litRatio = 0.5;
+  litRatio = Math.max(0.05, Math.min(0.95, litRatio));
+
+  // Each light+dark pair spans colWidthPx * 2 total
+  var pairW = colWidthPx * 2;
+  var litW  = pairW * litRatio;
+  var darkW = pairW * (1 - litRatio);
+
+  // numCols: how many individual column strips fit
+  var numCols = Math.ceil(canvasW / colWidthPx) + 4;
   var numSeams = numCols + 1;
   var numRows = Math.max(5, Math.round(canvasH / Math.max(18, colWidthPx * 0.7))) + 1;
 
-  // Shared Y positions — identical for every seam so quads touch perfectly
+  // Shared Y positions
   var sharedY = [];
   sharedY[0] = 0;
   sharedY[numRows - 1] = canvasH;
@@ -56,14 +83,22 @@ function buildSeams(canvasW, canvasH, colWidthPx, xyRoughness) {
 
   var SVX = [];
   var SVY = [];
-  var mag = xyRoughness * colWidthPx * 0.18;
+  var mag   = xyRoughness * colWidthPx * 0.18;
   var maxDx = colWidthPx * 0.15;
+
+  // Build nominal X positions: seam 0 is off-screen left.
+  // Even seam gaps (between seam s and s+1 where s is even) = litW
+  // Odd seam gaps = darkW
+  var nomXs = [];
+  nomXs[0] = -pairW; // start well off left edge
+  for (var s = 1; s < numSeams; s++) {
+    var prevGap = (s - 1) % 2 === 0 ? litW : darkW;
+    nomXs[s] = nomXs[s - 1] + prevGap;
+  }
 
   for (var s = 0; s < numSeams; s++) {
     SVX[s] = [];
     SVY[s] = [];
-    var nomX = (s - 1) * colWidthPx;
-
     for (var r = 0; r < numRows; r++) {
       var rng = seededRand(s * 13337 + r * 1009 + 7);
       var ang = rng() * Math.PI * 2;
@@ -71,8 +106,7 @@ function buildSeams(canvasW, canvasH, colWidthPx, xyRoughness) {
       var dx = (r === 0 || r === numRows - 1)
         ? 0
         : Math.max(-maxDx, Math.min(maxDx, Math.cos(ang) * rad));
-
-      SVX[s][r] = nomX + dx;
+      SVX[s][r] = nomXs[s] + dx;
       SVY[s][r] = sharedY[r];
     }
   }
@@ -82,6 +116,8 @@ function buildSeams(canvasW, canvasH, colWidthPx, xyRoughness) {
     SVY: SVY,
     numSeams: numSeams,
     numCols: numCols,
-    numRows: numRows
+    numRows: numRows,
+    litW: litW,
+    darkW: darkW
   };
 }

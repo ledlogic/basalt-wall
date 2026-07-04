@@ -3,12 +3,18 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Basalt Column Wall Generator v1.23</title>
+  <title>Basalt Column Wall Generator v1.27</title>
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
 
-  <!-- Row 1: dimensions, column, contrast, brightness, roughness, texture -->
+  <!-- Title / info header — version, canvas size, print size, column info -->
+  <div id="header-bar">
+    <span id="app-title">Basalt Wall</span>
+    <span id="info"></span>
+  </div>
+
+  <!-- Single control row -->
   <div class="controls">
     <div class="ctrl">
       <label>Canvas W (m)</label>
@@ -28,6 +34,11 @@
       <span class="ctrl-out" id="colm-out">0.60m</span>
     </div>
     <div class="ctrl">
+      <label>View angle (°)</label>
+      <input type="range" id="va" min="-59" max="59" value="8" step="1">
+      <span class="ctrl-out" id="va-out">+8° cw</span>
+    </div>
+    <div class="ctrl">
       <label>Contrast</label>
       <input type="range" id="ct" min="0" max="100" value="45" step="1">
       <span class="ctrl-out" id="ct-out">45%</span>
@@ -36,6 +47,11 @@
       <label>&#9728; Day / Night &#9790;</label>
       <input type="range" id="bright" min="0" max="100" value="80" step="1">
       <span class="ctrl-out" id="bright-out">Day 80%</span>
+    </div>
+    <div class="ctrl">
+      <label>Grain angle (°)</label>
+      <input type="range" id="grain" min="0" max="180" value="90" step="1">
+      <span class="ctrl-out" id="grain-out">90° vertical</span>
     </div>
     <div class="ctrl">
       <label>XY roughness</label>
@@ -47,16 +63,13 @@
       <input type="range" id="td" min="10" max="220" value="100" step="10">
       <span class="ctrl-out" id="td-out">100</span>
     </div>
-  </div>
-
-  <!-- Row 2: grid, ports, debug, info, download -->
-  <div class="controls">
+    <div class="ctrl-sep"></div>
     <label class="chk">
-      <input type="checkbox" id="grid"> Print grid
+      <input type="checkbox" id="grid" checked> Print grid
     </label>
     <div class="ctrl">
       <label>Grid colour</label>
-      <input type="color" id="gcol" value="#ff5050">
+      <input type="color" id="gcol" value="#dedede">
     </div>
     <div class="ctrl">
       <label>Grid width</label>
@@ -64,18 +77,23 @@
       <span class="ctrl-out" id="glw-out">1.0px</span>
     </div>
     <label class="chk">
-      <input type="checkbox" id="ports"> TSU-9 ports
+      <input type="checkbox" id="ports" checked> TSU-9 ports
     </label>
+    <div class="ctrl">
+      <label>Port font (px)</label>
+      <input type="range" id="pfont" min="4" max="40" value="10" step="1">
+      <span class="ctrl-out" id="pfont-out">10px</span>
+    </div>
     <label class="chk">
       <input type="checkbox" id="dbg"> Debug
     </label>
-    <span id="info"></span>
     <button id="btn-dl">Download PNG</button>
   </div>
 
+
   <canvas id="c"></canvas>
 
-  <!-- JS: order matters — geometry first, then render, then actions (wires everything) -->
+  <!-- JS: order matters — geometry first, then render, then actions -->
   <script src="js/geometry.js"></script>
   <script src="js/render.js"></script>
   <script src="js/actions.js"></script>

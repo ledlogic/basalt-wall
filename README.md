@@ -61,6 +61,56 @@ Default: 36m × 45m canvas at 100 DPI
 
 ## Version History
 
+### v1.34 — Port font size control
+- Added Port font slider (4–40px, default 10px). Controls all port text: port numbers, BIO/VEG labels, zone labels.
+- BIO/VEG labels remain 10% larger than the base port font.
+
+### v1.33 — Grain angle control with per-face jitter
+- Added Grain angle slider (0°–180°). Default 90° = vertical grain (basalt columns run vertically).
+- All grain elements rotate together: banding strips, scratch lines, fracture lines, speck elongation.
+- Per-face seeded jitter ±5° applied on top of base angle for natural variation.
+- Grain direction uses unit vector math so banding parallelograms tile correctly at any angle.
+
+### v1.32 — TSU-9 ports visible by default
+- Ports checkbox enabled at startup.
+
+### v1.31 — View angle controls lit:dark column width ratio
+- Added View angle slider (−59° to +59°). At 0° lit and dark columns are equal width (50:50).
+- Ratio derived from cos(30°±θ) hexagonal prism projection via `viewAngleToRatio()` in geometry.js.
+- `buildSeams()` now takes `litRatio` and alternates column widths accordingly.
+- Info bar shows current lit:shd ratio (e.g. `lit:shd 53:47`).
+- Specks per face scale proportionally to actual face width.
+
+### v1.30 — Grid on by default, colour #dedede
+- Print grid checkbox enabled at startup.
+- Default grid colour changed from red #ff5050 to light grey #dedede (rgb 222,222,222).
+
+### v1.29 — Title/info header row
+- Added dedicated header bar above controls showing:
+  `Basalt Wall v1.29 | 2400x3000px | 24.0x30.0" print | col=40px (0.6m)`
+- App title and info update live as controls change.
+
+### v1.28 — All controls in single top row
+- Merged two control rows into one. Vertical separator (`.ctrl-sep`) divides
+  basalt settings from grid/overlay settings. Info line moved to its own bar below.
+  Wraps naturally on narrow viewports.
+
+### v1.27 — Port numbers, larger clog labels, crosshair grid
+- Each port labelled with zone-prefixed number below the bore: C01–C13, B01–B19, A01–A17.
+- BIO/VEG clog labels increased 10% in size (multiplier 0.99 vs previous 0.9).
+- Print grid replaced with crosshairs at each 1.5m intersection — arm length scales with grid line width control.
+
+### v1.26 — Clogged port indicators
+- ~20% of TSU-9 ports now show organic matter fill inside the bore hole.
+- BIO type: dark reddish-brown fill with lighter speck texture (carbon/organic residue).
+- VEG type: dark green fill with lighter speck texture (vegetation/moss growth).
+- Small label (BIO or VEG) appears above clogged ports in matching colour.
+- Clog condition seeded independently of tampered flag — both can coexist.
+- Legend updated to describe all three port states.
+
+### v1.25 — Removed grid labels
+- Print grid no longer draws meter labels or scale reminder text. Lines only.
+
 ### v1.24 — Print grid solid lines
 - Grid overlay changed from dashed `[6,4]` to solid lines.
 

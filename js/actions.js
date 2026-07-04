@@ -6,7 +6,7 @@
  * Depends on: geometry.js (m2px), render.js (render, lightParams)
  */
 
-var VERSION = '1.24';
+var VERSION = '1.34';
 var MAX_PIXELS = 20000000;
 var raf = null;
 
@@ -48,25 +48,31 @@ function readParams() {
   var Hm = Math.max(0.5, parseFloat($('chm').value) || 45);
   var dpi = Math.max(72, parseInt($('dpi').value) || 100);
   var colM = Math.max(0.2, parseFloat($('colm').value) || 0.6);
-  var ct = (parseInt($('ct').value) || 45) / 100;
+  var va  = parseInt($('va').value) || 8;
+  var ct  = (parseInt($('ct').value) || 45) / 100;
   var bv = (parseInt($('bright').value) || 80) / 100;
   var er = (parseInt($('er').value) || 35) / 100;
+  var grain = parseInt($('grain').value); if (isNaN(grain)) grain = 90;
   var tex = parseInt($('td').value) || 100;
   var showGrid = $('grid').checked;
   var gcol = $('gcol').value;
   var glw = parseFloat($('glw').value) || 1;
   var showPorts = $('ports').checked;
+  var portFont  = parseInt($('pfont').value) || 10;
   var debug = $('dbg').checked;
 
   var W = Math.round(m2px(Wm, dpi));
   var H = Math.round(m2px(Hm, dpi));
   var T = Math.round(m2px(colM, dpi));
 
+  var litRatio = viewAngleToRatio(va);
+
   // Info line
   var pWin = (W / dpi).toFixed(1);
   var pHin = (H / dpi).toFixed(1);
-  $('info').textContent = 'v' + VERSION + ' | ' + W + 'x' + H + 'px | '
-    + pWin + 'x' + pHin + '" print | col=' + T + 'px (' + colM + 'm)';
+  var pL = Math.round(litRatio * 100);
+  $('app-title').textContent = 'Basalt Wall v' + VERSION;
+  $('info').textContent = W + 'x' + H + 'px | ' + pWin + 'x' + pHin + '" print | col=' + T + 'px (' + colM + 'm) | lit:shd ' + pL + ':' + (100 - pL);
 
   if (W * H > MAX_PIXELS) {
     $('info').textContent += ' | TOO LARGE — lower DPI or dims';
@@ -93,10 +99,13 @@ function readParams() {
     brightness: bv,
     xyRoughness: er,
     texDensity: tex,
+    grainAngle: grain,
+    litRatio: litRatio,
     showGrid: showGrid,
     gridColour: gcol,
     gridLineWidth: glw,
     showPorts: showPorts,
+    portFont: portFont,
     debug: debug,
     lp: lp
   };
@@ -119,6 +128,10 @@ function downloadPNG() {
 function init() {
   // Slider wiring
   wire('colm', function (v) { return parseFloat(v).toFixed(2) + 'm'; });
+  wire('va', function (v) {
+    var n = parseInt(v);
+    return (n > 0 ? '+' : '') + n + '° ' + (n > 0 ? 'cw' : n < 0 ? 'ccw' : 'edge-on');
+  });
   wire('ct', function (v) { return v + '%'; });
   wire('bright', function (v) {
     var n = parseInt(v);
@@ -128,8 +141,14 @@ function init() {
     return 'Night ' + n + '%';
   });
   wire('er', function (v) { return v + '%'; });
+  wire('grain', function (v) {
+    var n = parseInt(v);
+    var label = n === 90 ? '90° vertical' : n === 0 || n === 180 ? n + '° horizontal' : n + '°';
+    return label;
+  });
   wire('td', function (v) { return v; });
   wire('glw', function (v) { return v + 'px'; });
+  wire('pfont', function (v) { return v + 'px'; });
 
   // Number inputs and checkboxes — schedule on change
   $('cwm').onchange = schedule;

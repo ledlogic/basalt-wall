@@ -44,7 +44,7 @@ function colourString(v, lp, alpha) {
 // bright flash, mid, dark inclusion, void), scratches (light and dark),
 // and horizontal fracture lines.
 
-function fillFace(ctx, ax, ay, bx, by, cx, cy, dx, dy, baseL, specks, seed, lp) {
+function fillFace(ctx, ax, ay, bx, by, cx, cy, dx, dy, baseL, specks, seed, lp, grainAngle) {
   ctx.save();
   ctx.beginPath();
   ctx.moveTo(ax, ay);
@@ -65,38 +65,79 @@ function fillFace(ctx, ax, ay, bx, by, cx, cy, dx, dy, baseL, specks, seed, lp) 
 
   var rng = seededRand(seed);
 
-  // Banded lightness — horizontal strips with slight variation
-  for (var i = 0; i < 14; i++) {
-    var ya = y0 + (i / 14) * h;
-    var yb = y0 + ((i + 1) / 14) * h;
-    ctx.fillStyle = colourString(baseL + (rng() - 0.5) * 22 * lp.spread, lp);
-    ctx.fillRect(x0, Math.round(ya), Math.ceil(w), Math.ceil(yb - ya) + 1);
+  // Per-face seeded jitter: ±5° on top of the base grain angle
+  var jitterDeg = (rng() - 0.5) * 10;   // ±5°
+  var gRad = ((grainAngle || 90) + jitterDeg) * Math.PI / 180;
+
+  // Grain direction unit vector — grain runs along this axis
+  var gx = Math.cos(gRad);   // component along grain
+  var gy = Math.sin(gRad);   // component along grain
+  // Cross-grain unit vector (perpendicular, used for banding offsets)
+  var cx2 = -gy;
+  var cy2 =  gx;
+
+  // Centre of the face for rotating banding
+  var fcx = (x0 + x1) * 0.5;
+  var fcy = (y0 + y1) * 0.5;
+
+  // Banded lightness — strips perpendicular to grain direction
+  // Project each strip position onto the cross-grain axis
+  var bands = 14;
+  var bandLen = Math.abs(w * cx2) + Math.abs(h * cy2); // extent along cross-grain
+  for (var i = 0; i < bands; i++) {
+    var t0 = (i / bands) - 0.5;
+    var t1 = ((i + 1) / bands) - 0.5;
+    var v = colourString(baseL + (rng() - 0.5) * 22 * lp.spread, lp);
+
+    // Draw as a filled parallelogram strip oriented to grain
+    var hw = (w * 0.5 + 4);
+    var hh = (h * 0.5 + 4);
+    var off0 = t0 * bandLen;
+    var off1 = t1 * bandLen;
+    // Four corners of the strip in face space
+    var p0x = fcx + cx2 * off0 - gx * hw;
+    var p0y = fcy + cy2 * off0 - gy * hw;
+    var p1x = fcx + cx2 * off0 + gx * hw;
+    var p1y = fcy + cy2 * off0 + gy * hw;
+    var p2x = fcx + cx2 * off1 + gx * hw;
+    var p2y = fcy + cy2 * off1 + gy * hw;
+    var p3x = fcx + cx2 * off1 - gx * hw;
+    var p3y = fcy + cy2 * off1 - gy * hw;
+
+    ctx.fillStyle = v;
+    ctx.beginPath();
+    ctx.moveTo(p0x, p0y); ctx.lineTo(p1x, p1y);
+    ctx.lineTo(p2x, p2y); ctx.lineTo(p3x, p3y);
+    ctx.closePath();
+    ctx.fill();
   }
 
-  // Mineral specks — 4 tiers
+  // Mineral specks — 4 tiers (position-only, unaffected by grain angle)
   for (var i = 0; i < specks; i++) {
     var sx = x0 + rng() * w;
     var sy = y0 + rng() * h;
     var roll = rng();
     var sz = rng() * 2.6 + 0.3;
     var lv;
-    if (roll > 0.75)      lv = baseL + 50 * lp.spread + rng() * 35;   // bright flash
-    else if (roll > 0.40) lv = baseL + rng() * 16 * lp.spread;         // mid
-    else if (roll > 0.15) lv = baseL - 25 * lp.spread - rng() * 12;   // dark inclusion
-    else                  lv = baseL - 40 * lp.spread - rng() * 10;   // void
+    if (roll > 0.75)      lv = baseL + 50 * lp.spread + rng() * 35;
+    else if (roll > 0.40) lv = baseL + rng() * 16 * lp.spread;
+    else if (roll > 0.15) lv = baseL - 25 * lp.spread - rng() * 12;
+    else                  lv = baseL - 40 * lp.spread - rng() * 10;
     ctx.fillStyle = colourString(lv, lp, 0.35 + rng() * 0.65);
     ctx.beginPath();
-    ctx.ellipse(sx, sy, sz, sz * (0.2 + rng() * 0.55), rng() * Math.PI, 0, Math.PI * 2);
+    // Elongate specks along grain direction
+    ctx.ellipse(sx, sy, sz, sz * (0.2 + rng() * 0.45), gRad + (rng() - 0.5) * 0.4, 0, Math.PI * 2);
     ctx.fill();
   }
 
-  // Scratch lines — both lighter and darker than base
+  // Scratch lines — run along grain angle ± small random spread
   var scratchCount = Math.max(1, Math.floor(specks / 6));
   for (var i = 0; i < scratchCount; i++) {
     var sx = x0 + rng() * w;
     var sy = y0 + rng() * h;
     var len = 6 + rng() * 35;
-    var ang = (rng() - 0.5) * 0.5;
+    // Scratches run along grain with ±15° spread
+    var ang = gRad + (rng() - 0.5) * 0.52;
     var bright = rng() > 0.4;
     var lv = bright
       ? baseL + 22 * lp.spread + rng() * 18
@@ -109,17 +150,23 @@ function fillFace(ctx, ax, ay, bx, by, cx, cy, dx, dy, baseL, specks, seed, lp) 
     ctx.stroke();
   }
 
-  // Horizontal fracture lines
+  // Fracture lines — run along grain angle, span full face width
   for (var sg = 0; sg < 10; sg++) {
     var rng2 = seededRand(seed * 100 + sg * 31);
-    var fy = y0 + rng2() * h * 0.93;
-    var fx = x0 + w * (0.08 + rng2() * 0.84);
-    var fey = fy + (rng2() - 0.5) * 11;
+    // Start point: random position along cross-grain axis
+    var offset = (rng2() - 0.5) * bandLen;
+    var startX = fcx + cx2 * offset - gx * (w * 0.6 + 4);
+    var startY = fcy + cy2 * offset - gy * (w * 0.6 + 4);
+    // End point: follow grain, slight perpendicular drift
+    var fracLen = w * (0.4 + rng2() * 0.7);
+    var drift = (rng2() - 0.5) * 11;
+    var endX = startX + gx * fracLen + cx2 * drift;
+    var endY = startY + gy * fracLen + cy2 * drift;
     ctx.strokeStyle = colourString(baseL - 20 * lp.spread + rng2() * 6, lp, 0.4);
     ctx.lineWidth = 0.5 + rng2() * 0.7;
     ctx.beginPath();
-    ctx.moveTo(x0, fy);
-    ctx.lineTo(fx, fey);
+    ctx.moveTo(startX, startY);
+    ctx.lineTo(endX, endY);
     ctx.stroke();
   }
 
@@ -127,48 +174,35 @@ function fillFace(ctx, ax, ay, bx, by, cx, cy, dx, dy, baseL, specks, seed, lp) 
 }
 
 // ── Print grid overlay ────────────────────────────────────────────
-// Dashed lines every 1.5 game meters (= 1 print inch = dpi pixels).
-// Horizontal AND vertical. Labels show cumulative game meters.
+// Crosshairs at each 1.5m (1 inch) intersection instead of full lines.
+// Crosshair arm length = 6px each side by default, scales with line width.
 
 function drawGrid(ctx, W, H, dpi, gridColour, gridLineWidth) {
-  var step = dpi; // 1 inch in pixels
+  var step = dpi; // 1 inch = 1.5m in pixels
+  var arm = Math.max(4, Math.round(gridLineWidth * 5 + 3)); // crosshair arm length px
+
   ctx.save();
   ctx.strokeStyle = gridColour;
   ctx.lineWidth = gridLineWidth;
   ctx.setLineDash([]);
 
-  // Vertical lines
   for (var x = step; x < W; x += step) {
-    ctx.beginPath();
-    ctx.moveTo(Math.round(x) + 0.5, 0);
-    ctx.lineTo(Math.round(x) + 0.5, H);
-    ctx.stroke();
-  }
-  // Horizontal lines
-  for (var y = step; y < H; y += step) {
-    ctx.beginPath();
-    ctx.moveTo(0, Math.round(y) + 0.5);
-    ctx.lineTo(W, Math.round(y) + 0.5);
-    ctx.stroke();
-  }
-
-  // Labels
-  ctx.font = 'bold 10px monospace';
-  ctx.fillStyle = gridColour;
-  ctx.globalAlpha = 0.8;
-  ctx.textAlign = 'left';
-  for (var i = 1; i * step < W; i++) {
-    ctx.fillText((i * 1.5).toFixed(1) + 'm', Math.round(i * step) + 3, 12);
-  }
-  for (var i = 1; i * step < H; i++) {
-    ctx.fillText((i * 1.5).toFixed(1) + 'm', 3, Math.round(i * step) - 3);
+    var xi = Math.round(x) + 0.5;
+    for (var y = step; y < H; y += step) {
+      var yi = Math.round(y) + 0.5;
+      // Horizontal arm
+      ctx.beginPath();
+      ctx.moveTo(xi - arm, yi);
+      ctx.lineTo(xi + arm, yi);
+      ctx.stroke();
+      // Vertical arm
+      ctx.beginPath();
+      ctx.moveTo(xi, yi - arm);
+      ctx.lineTo(xi, yi + arm);
+      ctx.stroke();
+    }
   }
 
-  // Scale reminder
-  ctx.textAlign = 'right';
-  ctx.globalAlpha = 0.6;
-  ctx.font = 'bold 9px monospace';
-  ctx.fillText('1 sq = 1.5m = 1in @ ' + dpi + 'dpi', W - 4, H - 4);
   ctx.restore();
 }
 
@@ -176,11 +210,14 @@ function drawGrid(ctx, W, H, dpi, gridColour, gridLineWidth) {
 // 49 ports in hex-offset honeycomb across 3 zones.
 // Ports placed only on LIT columns (even index).
 // Zone C (13 ports, top), Zone B (19, middle), Zone A (17, bottom).
-// ~3 of 49 flagged as tampered (orange dashed ring).
+// ~6% tampered (orange dashed ring). ~20% clogged:
+//   BIO = dark brown carbon/organic residue fill
+//   VEG = dark green vegetation/moss fill
 
-function drawPorts(ctx, W, H, dpi, lp, SVX, numSeams, numCols, numRows) {
+function drawPorts(ctx, W, H, dpi, lp, SVX, numSeams, numCols, numRows, portFont) {
   var portRadius = Math.max(2, m2px(0.22, dpi) / 2);
   var midR = Math.floor(numRows / 2);
+  var fnt = portFont || 10;
 
   var zones = [
     { name: 'C', count: 13, yStart: 0.04, yEnd: 0.28, rows: 2 },
@@ -226,12 +263,47 @@ function drawPorts(ctx, W, H, dpi, lp, SVX, numSeams, numCols, numRows) {
         var py = y + jy;
         var tampered = rng() < 0.06;
 
+        // Global port number — sequential across all zones, 1-indexed
+        var portNum = placed + 1;
+        // Prefix by zone: C01-C13, B01-B19, A01-A17
+        var portLabel = z.name + (portNum < 10 ? '0' : '') + portNum;
+
+        // Clogged: seeded separately so it's independent of tampered.
+        // ~20% of ports have organic/vegetation matter blocking them.
+        var rng2 = seededRand(zi * 10000 + row * 1000 + p * 7 + 99);
+        var clogRoll = rng2();
+        var clogged = clogRoll < 0.20;
+        // Vary the clog type: vegetation (green) vs carbon/organic residue (brown)
+        var clogVeg = rng2() > 0.45; // 55% brown carbon, 45% green vegetation
+
         // Dark bore hole
         ctx.beginPath();
         ctx.arc(px, py, portRadius, 0, Math.PI * 2);
         var holeL = Math.max(lp.floor * 0.5, 18 + lp.base * 0.08);
         ctx.fillStyle = colourString(holeL, lp);
         ctx.fill();
+
+        // Clog fill — organic matter inside the bore hole
+        if (clogged) {
+          var clogR = portRadius * (0.60 + rng2() * 0.30);
+          var clogOx = (rng2() - 0.5) * portRadius * 0.25;
+          var clogOy = (rng2() - 0.5) * portRadius * 0.25;
+          ctx.fillStyle = clogVeg ? 'rgba(72,98,52,0.82)' : 'rgba(88,52,28,0.85)';
+          ctx.beginPath();
+          ctx.arc(px + clogOx, py + clogOy, clogR, 0, Math.PI * 2);
+          ctx.fill();
+          for (var cs = 0; cs < 4; cs++) {
+            var sx = px + (rng2() - 0.5) * portRadius * 1.2;
+            var sy = py + (rng2() - 0.5) * portRadius * 1.2;
+            var sr = rng2() * portRadius * 0.25 + 0.5;
+            ctx.fillStyle = clogVeg
+              ? 'rgba(110,140,70,' + (0.4 + rng2() * 0.4) + ')'
+              : 'rgba(130,80,40,' + (0.35 + rng2() * 0.4) + ')';
+            ctx.beginPath();
+            ctx.arc(sx, sy, sr, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
 
         // Flush cap ring
         ctx.beginPath();
@@ -240,7 +312,7 @@ function drawPorts(ctx, W, H, dpi, lp, SVX, numSeams, numCols, numRows) {
         ctx.lineWidth = Math.max(0.8, portRadius * 0.2);
         ctx.stroke();
 
-        // Tampered indicator
+        // Tampered indicator — orange dashed outer ring
         if (tampered) {
           ctx.beginPath();
           ctx.arc(px, py, portRadius + Math.max(2, portRadius * 0.6), 0, Math.PI * 2);
@@ -251,13 +323,36 @@ function drawPorts(ctx, W, H, dpi, lp, SVX, numSeams, numCols, numRows) {
           ctx.setLineDash([]);
         }
 
+        // Port number — below the port
+        ctx.save();
+        ctx.font = 'bold ' + fnt + 'px monospace';
+        ctx.textAlign = 'center';
+        ctx.shadowColor = '#000';
+        ctx.shadowBlur = 2;
+        ctx.fillStyle = 'rgba(255,220,100,0.85)';
+        ctx.fillText(portLabel, px, py + portRadius + fnt + 1);
+        ctx.restore();
+
+        // BIO/VEG clog label — above the port, 10% larger
+        if (clogged) {
+          var clogFnt = Math.round(fnt * 1.1);
+          ctx.save();
+          ctx.font = 'bold ' + clogFnt + 'px monospace';
+          ctx.textAlign = 'center';
+          ctx.shadowColor = '#000';
+          ctx.shadowBlur = 2;
+          ctx.fillStyle = clogVeg ? 'rgba(140,200,90,0.9)' : 'rgba(200,130,70,0.9)';
+          ctx.fillText(clogVeg ? 'VEG' : 'BIO', px, py - portRadius - Math.max(2, portRadius * 0.5));
+          ctx.restore();
+        }
+
         placed++;
       }
     }
 
     // Zone label
     ctx.save();
-    ctx.font = 'bold ' + Math.max(10, Math.round(portRadius * 1.5)) + 'px monospace';
+    ctx.font = 'bold ' + Math.round(fnt * 1.2) + 'px monospace';
     ctx.textAlign = 'right';
     ctx.fillStyle = 'rgba(255,200,80,0.6)';
     ctx.shadowColor = '#000';
@@ -271,7 +366,7 @@ function drawPorts(ctx, W, H, dpi, lp, SVX, numSeams, numCols, numRows) {
   ctx.font = 'bold 9px monospace';
   ctx.fillStyle = 'rgba(255,200,80,0.5)';
   ctx.textAlign = 'left';
-  ctx.fillText('TSU-9: 49 ports on lit faces | 22cm bore | orange=tampered', 4, H - 4);
+  ctx.fillText('TSU-9: 49 ports | orange ring=tampered | BIO=carbon clog (brown) | VEG=vegetation clog (green)', 4, H - 4);
   ctx.restore();
 
   ctx.restore();
@@ -328,30 +423,34 @@ function render() {
   ctx.fillStyle = colourString(bg * 0.85, lp);
   ctx.fillRect(0, 0, W, H);
 
-  // Build perturbed seam grid
-  var seams = buildSeams(W, H, T, params.xyRoughness);
+  // Build perturbed seam grid — pass litRatio for correct face proportions
+  var seams = buildSeams(W, H, T, params.xyRoughness, params.litRatio);
   var SVX = seams.SVX;
   var SVY = seams.SVY;
   var numCols = seams.numCols;
   var numRows = seams.numRows;
   var numSeams = seams.numSeams;
+  var litW  = seams.litW;
+  var darkW = seams.darkW;
 
   var specsPerCell = Math.max(3, Math.round(params.texDensity * (T * H) / 18000));
 
-  // Simple alternating: even = light, odd = dark
+  // Alternating: even = light, odd = dark
+  // Specks scale with actual face width so narrower faces aren't over-speckled
   var lightBase = lp.base * (1 + params.contrast * 0.25);
-  var darkBase = lp.base * (1 - params.contrast * 0.25);
+  var darkBase  = lp.base * (1 - params.contrast * 0.25);
 
   for (var col = 0; col < numCols; col++) {
     var isLight = col % 2 === 0;
     var faceL = Math.max(lp.floor, Math.min(lp.ceil, isLight ? lightBase : darkBase));
+    var faceW = isLight ? litW : darkW;
 
-    // Per-column slight variation
     var rng = seededRand(col * 98317 + 42);
     var vary = (rng() - 0.5) * 8 * lp.spread;
     var finalL = Math.max(lp.floor, Math.min(lp.ceil, faceL + vary));
 
-    var sp = Math.max(1, Math.round(specsPerCell / numRows));
+    // Scale specks proportionally to face width
+    var sp = Math.max(1, Math.round(specsPerCell * (faceW / (T * 2)) / numRows * 2));
 
     for (var r = 0; r < numRows - 1; r++) {
       fillFace(
@@ -360,14 +459,14 @@ function render() {
         SVX[col + 1][r], SVY[col + 1][r],
         SVX[col + 1][r + 1], SVY[col + 1][r + 1],
         SVX[col][r + 1], SVY[col][r + 1],
-        finalL, sp, (col * 7001 + r * 13) * 100, lp
+        finalL, sp, (col * 7001 + r * 13) * 100, lp, params.grainAngle
       );
     }
   }
 
   // Overlays
   if (params.showPorts) {
-    drawPorts(ctx, W, H, params.dpi, lp, SVX, numSeams, numCols, numRows);
+    drawPorts(ctx, W, H, params.dpi, lp, SVX, numSeams, numCols, numRows, params.portFont);
   }
   if (params.showGrid) {
     drawGrid(ctx, W, H, params.dpi, params.gridColour, params.gridLineWidth);

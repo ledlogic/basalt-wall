@@ -167,9 +167,11 @@ function drawGrid(ctx, W, H, dpi, gridColour, gridLineWidth) {
   ctx.strokeStyle = gridColour;
   ctx.lineWidth = gridLineWidth;
   ctx.setLineDash([]);
-  for (var x = step; x < W; x += step) {
+  ctx.shadowBlur = 0;
+  ctx.shadowColor = 'transparent';
+  for (var x = 0; x <= W; x += step) {
     var xi = Math.round(x) + 0.5;
-    for (var y = step; y < H; y += step) {
+    for (var y = 0; y <= H; y += step) {
       var yi = Math.round(y) + 0.5;
       ctx.beginPath(); ctx.moveTo(xi - arm, yi); ctx.lineTo(xi + arm, yi); ctx.stroke();
       ctx.beginPath(); ctx.moveTo(xi, yi - arm); ctx.lineTo(xi, yi + arm); ctx.stroke();
@@ -178,103 +180,158 @@ function drawGrid(ctx, W, H, dpi, gridColour, gridLineWidth) {
   ctx.restore();
 }
 
-function drawPorts(ctx, W, H, dpi, lp, SVX, numSeams, numCols, numRows, portFont) {
+function drawPorts(ctx, W, H, dpi, lp, SVX, SVY, numSeams, numCols, numRows, portFont) {
   var portRadius = Math.max(2, m2px(0.22, dpi) / 2);
+  var midR = Math.floor(numRows / 2);
   var fnt = portFont || 10;
+
   var zones = [
     { name: 'C', count: 13, yStart: 0.04, yEnd: 0.28, rows: 2 },
     { name: 'B', count: 19, yStart: 0.32, yEnd: 0.62, rows: 3 },
     { name: 'A', count: 17, yStart: 0.66, yEnd: 0.92, rows: 3 }
   ];
 
-  ctx.save();
-  var placed = 0;
-  for (var zi = 0; zi < zones.length; zi++) {
-    var z = zones[zi]; placed = 0;
-    for (var row = 0; row < z.rows && placed < z.count; row++) {
-      var y = H * (z.yStart + (z.yEnd - z.yStart) * (row / Math.max(1, z.rows - 1)));
-      for (var col = 0; col < numCols && placed < z.count; col++) {
-        if (col % 2 !== 0) continue;
-        if (col + 1 >= numSeams) continue;
-        var rIdx = 0;
-        for (var ri = 0; ri < numRows - 1; ri++) {
-          if (SVY[col][ri] <= y && SVY[col][ri+1] >= y) { rIdx = ri; break; }
-        }
-        var faceW = SVX[col+1][rIdx] - SVX[col][rIdx];
-        if (faceW < portRadius * 3) continue;
-        var fcx2 = (SVX[col][rIdx] + SVX[col+1][rIdx]) * 0.5;
-        if (fcx2 < 0 || fcx2 > W) continue;
+  // Collect lit column centre positions
+  var litCols = [];
+  for (var col = 0; col < numCols; col++) {
+    if (col % 2 === 0) {
+      var cx = (SVX[col][midR] + SVX[col + 1][midR]) * 0.5;
+      if (cx > 0 && cx < W) litCols.push({ col: col, cx: cx });
+    }
+  }
 
-        var rng = seededRand(zi * 100000 + row * 1000 + col * 7 + 3);
-        var rowH = SVY[col][Math.min(rIdx+1, numRows-1)] - SVY[col][rIdx];
-        var px = fcx2 + (rng() - 0.5) * faceW * 0.35;
-        var py = y + (rng() - 0.5) * rowH * 0.2;
+  ctx.save();
+
+  for (var zi = 0; zi < zones.length; zi++) {
+    var z = zones[zi];
+    var yTop = H * z.yStart;
+    var yBot = H * z.yEnd;
+    var rowH = (yBot - yTop) / z.rows;
+    var placed = 0;
+    var portsPerRow = Math.ceil(z.count / z.rows);
+
+    for (var row = 0; row < z.rows && placed < z.count; row++) {
+      var y = yTop + rowH * 0.5 + row * rowH;
+      var isOdd = row % 2 === 1;
+      var thisRow = Math.min(portsPerRow, z.count - placed);
+
+      for (var p = 0; p < thisRow; p++) {
+        var idx = Math.round((p + 0.5) * litCols.length / thisRow) + (isOdd ? 1 : 0);
+        idx = Math.max(0, Math.min(litCols.length - 1, idx));
+        var fc = litCols[idx];
+        if (!fc) continue;
+
+        var rng = seededRand(zi * 10000 + row * 1000 + p * 7 + 42);
+        var faceW = SVX[fc.col + 1][midR] - SVX[fc.col][midR];
+        var jx = (rng() - 0.5) * faceW * 0.35;
+        var jy = (rng() - 0.5) * rowH * 0.2;
+        var px = fc.cx + jx;
+        var py = y + jy;
         var tampered = rng() < 0.06;
+
         var portNum = placed + 1;
         var portLabel = z.name + (portNum < 10 ? '0' : '') + portNum;
 
-        var rng2 = seededRand(zi * 10000 + row * 1000 + col * 7 + 99);
+        var rng2 = seededRand(zi * 10000 + row * 1000 + p * 7 + 99);
         var clogged = rng2() < 0.20;
         var clogVeg = rng2() > 0.45;
 
-        ctx.beginPath(); ctx.arc(px, py, portRadius, 0, Math.PI * 2);
-        ctx.fillStyle = colourString(Math.max(lp.floor * 0.5, 18 + lp.base * 0.08), lp);
+        // Dark bore hole
+        ctx.beginPath();
+        ctx.arc(px, py, portRadius, 0, Math.PI * 2);
+        var holeL = Math.max(lp.floor * 0.5, 18 + lp.base * 0.08);
+        ctx.fillStyle = colourString(holeL, lp);
         ctx.fill();
 
+        // Clog fill
         if (clogged) {
           var clogR = portRadius * (0.60 + rng2() * 0.30);
+          var clogOx = (rng2() - 0.5) * portRadius * 0.25;
+          var clogOy = (rng2() - 0.5) * portRadius * 0.25;
           ctx.fillStyle = clogVeg ? 'rgba(72,98,52,0.82)' : 'rgba(88,52,28,0.85)';
           ctx.beginPath();
-          ctx.arc(px + (rng2()-0.5)*portRadius*0.25, py + (rng2()-0.5)*portRadius*0.25, clogR, 0, Math.PI*2);
+          ctx.arc(px + clogOx, py + clogOy, clogR, 0, Math.PI * 2);
           ctx.fill();
           for (var cs = 0; cs < 4; cs++) {
-            ctx.fillStyle = clogVeg ? 'rgba(110,140,70,' + (0.4+rng2()*0.4) + ')' : 'rgba(130,80,40,' + (0.35+rng2()*0.4) + ')';
+            var sx = px + (rng2() - 0.5) * portRadius * 1.2;
+            var sy = py + (rng2() - 0.5) * portRadius * 1.2;
+            var sr = rng2() * portRadius * 0.25 + 0.5;
+            ctx.fillStyle = clogVeg
+              ? 'rgba(110,140,70,' + (0.4 + rng2() * 0.4) + ')'
+              : 'rgba(130,80,40,' + (0.35 + rng2() * 0.4) + ')';
             ctx.beginPath();
-            ctx.arc(px+(rng2()-0.5)*portRadius*1.2, py+(rng2()-0.5)*portRadius*1.2, rng2()*portRadius*0.25+0.5, 0, Math.PI*2);
+            ctx.arc(sx, sy, sr, 0, Math.PI * 2);
             ctx.fill();
           }
         }
 
-        ctx.beginPath(); ctx.arc(px, py, portRadius + Math.max(1, portRadius*0.35), 0, Math.PI*2);
+        // Flush cap ring
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(px, py, portRadius + Math.max(1, portRadius * 0.35), 0, Math.PI * 2);
         ctx.strokeStyle = colourString(lp.base * 0.75, lp, 0.7);
-        ctx.lineWidth = Math.max(0.8, portRadius * 0.2); ctx.stroke();
+        ctx.lineWidth = Math.max(0.8, portRadius * 0.2);
+        ctx.stroke();
+        ctx.restore();
 
+        // Tampered indicator
         if (tampered) {
-          ctx.beginPath(); ctx.arc(px, py, portRadius + Math.max(2, portRadius*0.6), 0, Math.PI*2);
+          ctx.save();
+          ctx.beginPath();
+          ctx.arc(px, py, portRadius + Math.max(2, portRadius * 0.6), 0, Math.PI * 2);
           ctx.strokeStyle = 'rgba(255,160,40,0.7)';
-          ctx.lineWidth = Math.max(1, portRadius*0.25);
-          ctx.setLineDash([3,2]); ctx.stroke(); ctx.setLineDash([]);
+          ctx.lineWidth = Math.max(1, portRadius * 0.25);
+          ctx.setLineDash([3, 2]);
+          ctx.stroke();
+          ctx.restore();
         }
 
+        // Port label
         ctx.save();
-        ctx.font = 'bold ' + fnt + 'px monospace'; ctx.textAlign = 'center';
-        ctx.shadowColor = '#000'; ctx.shadowBlur = 2;
+        ctx.font = 'bold ' + fnt + 'px monospace';
+        ctx.textAlign = 'center';
+        ctx.shadowColor = '#000';
+        ctx.shadowBlur = 2;
         ctx.fillStyle = 'rgba(255,220,100,0.85)';
         ctx.fillText(portLabel, px, py + portRadius + fnt + 1);
         ctx.restore();
 
+        // Clog label
         if (clogged) {
+          var clogFnt = Math.round(fnt * 1.1);
           ctx.save();
-          ctx.font = 'bold ' + Math.round(fnt*1.1) + 'px monospace'; ctx.textAlign = 'center';
-          ctx.shadowColor = '#000'; ctx.shadowBlur = 2;
+          ctx.font = 'bold ' + clogFnt + 'px monospace';
+          ctx.textAlign = 'center';
+          ctx.shadowColor = '#000';
+          ctx.shadowBlur = 2;
           ctx.fillStyle = clogVeg ? 'rgba(140,200,90,0.9)' : 'rgba(200,130,70,0.9)';
-          ctx.fillText(clogVeg ? 'VEG' : 'BIO', px, py - portRadius - Math.max(2, portRadius*0.5));
+          ctx.fillText(clogVeg ? 'VEG' : 'BIO', px, py - portRadius - Math.max(2, portRadius * 0.5));
           ctx.restore();
         }
+
         placed++;
       }
     }
+
+    // Zone label
     ctx.save();
-    ctx.font = 'bold ' + Math.round(fnt*1.2) + 'px monospace'; ctx.textAlign = 'right';
-    ctx.fillStyle = 'rgba(255,200,80,0.6)'; ctx.shadowColor = '#000'; ctx.shadowBlur = 3;
+    ctx.font = 'bold ' + Math.round(fnt * 1.2) + 'px monospace';
+    ctx.textAlign = 'right';
+    ctx.fillStyle = 'rgba(255,200,80,0.6)';
+    ctx.shadowColor = '#000';
+    ctx.shadowBlur = 3;
     ctx.fillText('Zone ' + z.name + ' (' + z.count + ')', W - 6, H * z.yStart + 14);
     ctx.restore();
   }
 
+  // Legend
   ctx.save();
-  ctx.font = 'bold 9px monospace'; ctx.fillStyle = 'rgba(255,200,80,0.5)'; ctx.textAlign = 'left';
+  ctx.font = 'bold 9px monospace';
+  ctx.fillStyle = 'rgba(255,200,80,0.5)';
+  ctx.textAlign = 'left';
   ctx.fillText('TSU-9: 49 ports | orange ring=tampered | BIO=carbon clog (brown) | VEG=vegetation clog (green)', 4, H - 4);
   ctx.restore();
+
   ctx.restore();
 }
 
@@ -303,7 +360,7 @@ function drawDebug(ctx, W, H, SVX, SVY, numSeams, numCols, numRows) {
 function renderForegroundClusters(ctx, W, H, dpi, clusters, T, xyRoughness,
                                   litRatio, groundY, mainNumSeams,
                                   specsPerCell, lightBase, darkBase,
-                                  lp, contrast, grainAngle) {
+                                  lp, contrast, grainAngle, viewAngleDeg) {
   for (var ci = 0; ci < clusters.length; ci++) {
     var cl = clusters[ci];
     var clH = H * cl.heightFrac;   // height of this cluster in pixels
@@ -341,46 +398,139 @@ function renderForegroundClusters(ctx, W, H, dpi, clusters, T, xyRoughness,
     var darkenAmount = 6 + ci * 2;
     var usedCols = Math.min(cl.colCount, clSeams.numCols);
 
-    // Clip canvas to the cluster's vertical extent + horizontal span
+    // Cap height needed above yTop (must match drawHexTopCaps calculation)
+    var capH = (clSeams.litW + clSeams.darkW) / 2 * 0.28;
+
+    // Clip canvas to cluster columns + cap height above + ground below
     ctx.save();
     ctx.beginPath();
-    ctx.rect(cl.xStart - T * 2, yTop, clW + T * 4, H - yTop);
+    ctx.rect(cl.xStart - T * 2, yTop - capH - 4, clW + T * 4, H - yTop + capH + 4);
     ctx.clip();
 
     drawColumns(ctx, clSVX, clSVY, usedCols, clSeams.numRows,
       clSeams.litW, clSeams.darkW, clGroundY, H, darkenAmount, specsPerCell,
       lightBase, darkBase, lp, contrast, grainAngle, cl.seed);
 
-    // Thin shadow line at the cluster's top cut edge
-    drawClusterTopEdge(ctx, clSVX, clSVY, usedCols, clSeams.numRows, yTop, lp);
+    // Hex top caps — foreshortened top face of each column, drawn above yTop
+    drawHexTopCaps(ctx, clSVX, clSVY, usedCols, clSeams.numRows,
+      clSeams.litW, clSeams.darkW, yTop, lp,
+      lightBase, darkBase, grainAngle, viewAngleDeg, cl.seed);
 
     ctx.restore();
     // No drawGroundEdge here — main wall ground fill already handles the soil strip
   }
 }
 
-// Draw a shadow line along the top cut of a foreground cluster
-function drawClusterTopEdge(ctx, SVX, SVY, numCols, numRows, yTop, lp) {
-  ctx.save();
-  ctx.beginPath();
-  var moved = false;
-  for (var seam = 0; seam <= numCols; seam++) {
-    if (!SVX[seam]) continue;
-    var xAtTop = SVX[seam][0];
+// ── Hex top caps for foreground clusters ─────────────────────────
+// Each column gets a foreshortened top face drawn above yTop,
+// simulating an oblique view of the hexagonal prism top.
+//
+// The cap is a quadrilateral:
+//   bottom edge = the column's two seam X values at yTop (full width)
+//   top edge    = inset slightly and raised by capH pixels
+//
+// Lit columns (even): top face catches light — brighter than the front face.
+// Dark columns (odd): top face is mid-tone, partly shadowed.
+// Each cap uses fillFace for basalt texture consistency.
+//
+// viewAngleDeg controls the horizontal skew of the top edge:
+//   positive angle tilts the top edge to the right (light from upper-left).
+// capH is derived from colWidth and a fixed oblique elevation (~20°).
+
+function drawHexTopCaps(ctx, SVX, SVY, numCols, numRows, litW, darkW,
+                        yTop, lp, lightBase, darkBase, grainAngle,
+                        viewAngleDeg, seedOffset) {
+  if (seedOffset === undefined) seedOffset = 0;
+
+  // Cap height: simulate ~18° elevation angle — sin(18°) ≈ 0.31
+  // Use the average column width as the reference dimension
+  var pairW = litW + darkW;
+  var colW   = pairW / 2;
+  var capH   = colW * 0.28;   // vertical pixel depth of the top face
+  // Horizontal skew: top edge shifts right as view angle increases
+  // (the far edge of the hex top is displaced by tan(viewAngle) * capH)
+  var skewX  = Math.tan((viewAngleDeg || 0) * Math.PI / 180) * capH * 0.6;
+
+  // Helper: interpolate seam X at a given Y
+  function seamXatY(seam, y) {
+    if (!SVX[seam]) return 0;
     for (var r = 0; r < numRows - 1; r++) {
-      if (SVY[seam][r] <= yTop && SVY[seam][r + 1] >= yTop) {
-        var frac = (yTop - SVY[seam][r]) / (SVY[seam][r + 1] - SVY[seam][r]);
-        xAtTop = SVX[seam][r] + frac * (SVX[seam][r + 1] - SVX[seam][r]);
-        break;
+      if (SVY[seam][r] <= y && SVY[seam][r + 1] >= y) {
+        var frac = (y - SVY[seam][r]) / (SVY[seam][r + 1] - SVY[seam][r]);
+        return SVX[seam][r] + frac * (SVX[seam][r + 1] - SVX[seam][r]);
       }
     }
-    if (!moved) { ctx.moveTo(xAtTop, yTop); moved = true; }
-    else ctx.lineTo(xAtTop, yTop);
+    return SVX[seam][0];
   }
-  ctx.strokeStyle = colourString(lp.base * 0.45, lp, 0.65);
-  ctx.lineWidth = 2;
-  ctx.stroke();
-  ctx.restore();
+
+  for (var col = 0; col < numCols; col++) {
+    if (!SVX[col] || !SVX[col + 1]) continue;
+
+    var isLight = col % 2 === 0;
+    var faceW = isLight ? litW : darkW;
+
+    // Bottom edge of cap at yTop
+    var bL = seamXatY(col,     yTop);
+    var bR = seamXatY(col + 1, yTop);
+
+    // Top edge of cap: raised by capH, inset by a small fraction (hex foreshortening)
+    // The inset makes the top face narrower than the column face — hex geometry.
+    // For a regular hex viewed obliquely, the top face width = column face width * cos(30°) ≈ 0.866
+    // We approximate by insetting each edge by ~7% of column width.
+    var inset  = faceW * 0.07;
+    var tL = bL + inset  + skewX * 0.5;
+    var tR = bR - inset  + skewX * 0.5;
+    var tY = yTop - capH;
+
+    // Skip degenerate caps
+    if (Math.abs(bR - bL) < 2 || capH < 1) continue;
+
+    // Brightness: top face of a hex column catches more light than the front face.
+    // Lit columns: top is noticeably brighter. Dark columns: top is mid-tone.
+    var topBase = isLight
+      ? Math.min(lp.ceil, lightBase * 1.18)   // brighter — lit top face
+      : Math.min(lp.ceil, (lightBase + darkBase) * 0.52); // mid-tone
+
+    var rng = seededRand((col + seedOffset) * 55441 + 7);
+    var vary = (rng() - 0.5) * 10 * lp.spread;
+    var finalL = Math.max(lp.floor, Math.min(lp.ceil, topBase + vary));
+
+    var sp = Math.max(1, Math.round(faceW * capH / 800));
+
+    // Draw using fillFace for full basalt texture
+    // Quad: bottom-left, bottom-right, top-right, top-left
+    fillFace(
+      ctx,
+      bL, yTop,       // bottom-left
+      bR, yTop,       // bottom-right
+      tR, tY,         // top-right
+      tL, tY,         // top-left
+      finalL, sp,
+      (col + seedOffset) * 33331 + 9901,
+      lp,
+      0   // grain angle 0° (horizontal) — top face grain runs across the column
+    );
+
+    // Thin dark seam line along the bottom of the cap (where top meets front face)
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(bL, yTop);
+    ctx.lineTo(bR, yTop);
+    ctx.strokeStyle = colourString(lp.base * 0.38, lp, 0.7);
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+    ctx.restore();
+
+    // Thin highlight along the top ridge of the cap
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(tL, tY);
+    ctx.lineTo(tR, tY);
+    ctx.strokeStyle = colourString(lp.ceil * 0.72, lp, 0.45);
+    ctx.lineWidth = 0.8;
+    ctx.stroke();
+    ctx.restore();
+  }
 }
 
 // Main render
@@ -413,7 +563,7 @@ function render() {
     var clusters = buildForegroundClusters(params.clusterCount, W, H, T, params.dpi);
     renderForegroundClusters(ctx, W, H, params.dpi, clusters, T, params.xyRoughness,
       params.litRatio, groundY, numSeams, specsPerCell, lightBase, darkBase,
-      lp, params.contrast, params.grainAngle);
+      lp, params.contrast, params.grainAngle, params.viewAngleDeg);
   }
 
   // ── LAYER 3: subtle left-light wash (stone only, under labels) ────
@@ -424,7 +574,7 @@ function render() {
   ctx.fillRect(0, 0, W, H);
 
   // ── LAYER 4: TSU-9 port labels ────────────────────────────────────
-  if (params.showPorts) drawPorts(ctx, W, H, params.dpi, lp, SVX, numSeams, numCols, numRows, params.portFont);
+  if (params.showPorts) drawPorts(ctx, W, H, params.dpi, lp, SVX, SVY, numSeams, numCols, numRows, params.portFont);
 
   // ── LAYER 5: print grid ───────────────────────────────────────────
   if (params.showGrid)  drawGrid(ctx, W, H, params.dpi, params.gridColour, params.gridLineWidth);

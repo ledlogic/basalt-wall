@@ -178,11 +178,15 @@ function buildForegroundClusters(clusterCount, canvasW, canvasH, colWidthPx, dpi
   for (var ci = 0; ci < clusterCount; ci++) {
     var rng = seededRand(ci * 57331 + 18181);
 
-    // Cluster width: 3–5 cols (small) or 10–20 cols (large), biased small
+    // Cluster width in column PAIRS (lit+dark = 1 hex column).
+    // Small clusters: 3–5 hex columns (6–10 strips)
+    // Large clusters: 5–10 hex columns (10–20 strips)
+    // Always even so no hex column is cut in half.
     var isLarge = rng() > 0.6;
-    var colCount = isLarge
-      ? Math.round(10 + rng() * 10)   // 10–20
-      : Math.round(3 + rng() * 2);    // 3–5
+    var pairs = isLarge
+      ? Math.round(5 + rng() * 5)    // 5–10 hex columns
+      : Math.round(3 + rng() * 2);   // 3–5 hex columns
+    var colCount = pairs * 2;
 
     // Position: spread across canvas width, avoid extreme edges
     var minX = canvasW * 0.05;

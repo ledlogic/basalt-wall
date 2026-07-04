@@ -61,6 +61,15 @@ Default: 36m × 45m canvas at 100 DPI
 
 ## Version History
 
+### v1.35 — Variable ground line, foreground column clusters, hex top caps
+- Ground is raised 1.5 m from canvas bottom with controllable undulation variance (0–1.0 m).
+- Foreground column clusters rendered in front of the main wall, offset from the background grid.
+- Cluster widths in complete hex pairs (3–5 or 5–10 hex columns); heights randomised at 30–82%.
+- Foreshortened hex top caps on each foreground column with basalt texture and view-angle skew.
+- Render sequence formalised: background wall → foreground clusters → light wash → ports → grid → debug.
+- Grid crosshairs now include all four canvas edges.
+- Fixed SVY scope bug in drawPorts; fixed ctx state leaks between port/grid layers.
+
 ### v1.34 — Port font size control
 - Added Port font slider (4–40px, default 10px). Controls all port text: port numbers, BIO/VEG labels, zone labels.
 - BIO/VEG labels remain 10% larger than the base port font.

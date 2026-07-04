@@ -1,12 +1,12 @@
 /**
  * actions.js — Basalt Column Wall Generator
  * DOM wiring, parameter reading, render scheduling, PNG download.
- * v1.23 — Simplified alternating light/dark vertical rectangles.
+ * v1.35 — Variable ground line, foreground clusters, hex top caps.
  *
  * Depends on: geometry.js (m2px), render.js (render, lightParams)
  */
 
-var VERSION = '1.28';
+var VERSION = '1.35';
 var MAX_PIXELS = 20000000;
 var raf = null;
 
@@ -103,6 +103,7 @@ function readParams() {
     texDensity: tex,
     grainAngle: grain,
     litRatio: litRatio,
+    viewAngleDeg: va,
     showGrid: showGrid,
     gridColour: gcol,
     gridLineWidth: glw,
@@ -118,6 +119,11 @@ function readParams() {
 // ── PNG download ──────────────────────────────────────────────────
 
 function downloadPNG() {
+  // Force a synchronous render so the PNG captures the current state
+  // (scheduled rAF renders may not have fired yet)
+  if (raf) { cancelAnimationFrame(raf); raf = null; }
+  render();
+
   var a = document.createElement('a');
   var wm = $('cwm').value || 36;
   var hm = $('chm').value || 45;
